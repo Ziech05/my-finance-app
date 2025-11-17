@@ -1,31 +1,13 @@
-// File: my-finance-app/app/api/transactions/route.js (Perbarui seluruh file ini)
-
 import { sql } from "@vercel/postgres";
 import { NextResponse } from "next/server";
-// HAPUS: import { createTable } from "@/lib/db";
-
-// Pindahkan fungsi createTable ke sini agar pasti terbaca
-export async function createTable() {
-  try {
-    await sql`
-            CREATE TABLE IF NOT EXISTS transactions (
-                id SERIAL PRIMARY KEY,
-                jenis VARCHAR(20) NOT NULL,
-                deskripsi TEXT NOT NULL,
-                jumlah INT NOT NULL,
-                tanggal DATE NOT NULL
-            );
-        `;
-  } catch (error) {
-    // Biarkan error diabaikan jika tabel sudah ada
-  }
-}
+// Pastikan path ini benar sesuai struktur Anda
+import { createTable } from "@/lib/db";
 
 // Handler untuk metode GET (mengambil semua transaksi)
 export async function GET(request) {
   try {
     // Panggil fungsi untuk memastikan tabel sudah ada
-    await createTable(); // Sekarang fungsi ini ada di dalam file yang sama
+    await createTable();
 
     // Mengambil semua transaksi
     const result = await sql`
@@ -76,10 +58,10 @@ export async function POST(request) {
   }
 }
 
-// Handler untuk metode DELETE
 export async function DELETE(request) {
   try {
     const url = new URL(request.url);
+    // Mengambil ID dari URL query parameter
     const id = url.searchParams.get("id");
 
     if (!id) {
@@ -89,11 +71,13 @@ export async function DELETE(request) {
       );
     }
 
+    // Menghapus transaksi dari database
     const result = await sql`
             DELETE FROM transactions
             WHERE id = ${id};
         `;
 
+    // Baris yang dihapus (rowCount) harus 1 jika berhasil
     if (result.rowCount === 0) {
       return NextResponse.json(
         { error: "Transaksi tidak ditemukan." },
@@ -109,52 +93,6 @@ export async function DELETE(request) {
     console.error("Kesalahan saat menghapus data:", error);
     return NextResponse.json(
       { error: "Gagal menghapus transaksi." },
-      { status: 500 }
-    );
-  }
-}
-
-// Handler untuk metode PUT (Import/Restore data)
-export async function PUT(request) {
-  try {
-    const body = await request.json();
-    const { transactions } = body;
-
-    if (!transactions || !Array.isArray(transactions)) {
-      return NextResponse.json(
-        { error: "Format data impor tidak valid." },
-        { status: 400 }
-      );
-    }
-
-    // 1. Hapus semua data lama
-    await sql`DELETE FROM transactions;`;
-
-    // 2. Masukkan data baru
-    if (transactions.length > 0) {
-      const insertPromises = transactions.map((t) => {
-        // Pastikan t.jumlah dikonversi, karena data yang diimpor mungkin berupa string
-        const jumlah = parseInt(t.jumlah);
-
-        // PERBAIKAN: Gunakan sintaks INSERT yang aman dan benar
-        return sql`
-            INSERT INTO transactions (jenis, deskripsi, jumlah, tanggal)
-            VALUES (${t.jenis}, ${t.deskripsi}, ${jumlah}, ${t.tanggal});
-        `;
-      });
-      await Promise.all(insertPromises);
-    }
-
-    return NextResponse.json(
-      {
-        message: `${transactions.length} transaksi berhasil diimpor dan di-restore.`,
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("Kesalahan saat mengimpor data:", error);
-    return NextResponse.json(
-      { error: "Gagal mengimpor dan me-restore transaksi." },
       { status: 500 }
     );
   }
