@@ -97,3 +97,47 @@ export async function DELETE(request) {
     );
   }
 }
+
+export async function PUT(request) {
+  try {
+    const body = await request.json();
+    const { transactions } = body;
+
+    if (!transactions || !Array.isArray(transactions)) {
+      return NextResponse.json(
+        { error: "Format data impor tidak valid." },
+        { status: 400 }
+      );
+    }
+
+    // 1. Hapus semua data lama (Pendekatan Restore Sederhana)
+    await sql`DELETE FROM transactions;`;
+
+    // 2. Masukkan data baru
+    if (transactions.length > 0) {
+      // Kita akan menggunakan Promise.all untuk memasukkan banyak data sekaligus
+      const insertPromises = transactions.map((t) => {
+        // Pastikan tipe data sesuai (jumlah adalah integer)
+        const jumlah = parseInt(t.jumlah);
+        return sql`
+                    INSERT INTO transactions (jenis, deskripsi, jumlah, tanggal)
+                    VALUES (${t.jenis}, ${t.deskripsi}, ${jumlah}, ${t.tanggal});
+                `;
+      });
+      await Promise.all(insertPromises);
+    }
+
+    return NextResponse.json(
+      {
+        message: `${transactions.length} transaksi berhasil diimpor dan di-restore.`,
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("Kesalahan saat mengimpor data:", error);
+    return NextResponse.json(
+      { error: "Gagal mengimpor dan me-restore transaksi." },
+      { status: 500 }
+    );
+  }
+}

@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // Helper untuk format mata uang Rupiah (SAMA)
 const formatRupiah = (amount) => {
@@ -13,31 +13,20 @@ const formatRupiah = (amount) => {
   }).format(amount);
 };
 
-// Helper untuk memformat tanggal (BARU: menghilangkan jam/zona waktu)
+// Helper untuk memformat tanggal (SAMA)
 const formatDate = (dateString) => {
   if (!dateString) return "";
-  // Mengambil hanya tanggal YYYY-MM-DD
   return dateString.split("T")[0];
 };
 
 export default function FinanceTracker() {
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const importFileInputRef = useRef(null); // Ref untuk input file
 
-  // Logika Dark Mode (SAMA)
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [isDarkMode]);
+  // ... (Logika Dark Mode, State, fetchTransactions, handleChange, handleSubmit, deleteTransaction - SEMUA SAMA) ...
+  // (Pindahkan fungsi fetchTransactions, handleChange, handleSubmit, deleteTransaction dari kode sebelumnya ke sini)
 
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-  };
-
-  // --- State dan Logic Lainnya (SAMA) ---
-
+  // --- State dan Logic Lainnya ---
   const [transactions, setTransactions] = useState([]);
   const [formData, setFormData] = useState({
     jenis: "",
@@ -47,9 +36,16 @@ export default function FinanceTracker() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [message, setMessage] = useState(null); // State untuk pesan sukses
+
+  const clearMessages = () => {
+    setTimeout(() => {
+      setError(null);
+      setMessage(null);
+    }, 5000); // Pesan hilang setelah 5 detik
+  };
 
   const fetchTransactions = async () => {
-    /* ... (SAMA) ... */
     setLoading(true);
     setError(null);
     try {
@@ -58,9 +54,12 @@ export default function FinanceTracker() {
         throw new Error("Gagal mengambil data dari server.");
       }
       const data = await response.json();
-      setTransactions(data);
+      // Membersihkan kolom 'id' dan 'created_at' agar data siap di-export
+      const cleanData = data.map(({ id, created_at, ...rest }) => rest);
+      setTransactions(cleanData);
     } catch (err) {
       setError(err.message);
+      clearMessages();
     } finally {
       setLoading(false);
     }
@@ -76,9 +75,9 @@ export default function FinanceTracker() {
   };
 
   const handleSubmit = async (e) => {
-    /* ... (SAMA) ... */
     e.preventDefault();
     setError(null);
+    setMessage(null);
 
     try {
       const transactionToSend = {
@@ -104,20 +103,22 @@ export default function FinanceTracker() {
         tanggal: new Date().toISOString().split("T")[0],
       });
       await fetchTransactions();
+      setMessage("Transaksi berhasil ditambahkan!");
+      clearMessages();
     } catch (err) {
       setError(err.message);
+      clearMessages();
     }
   };
 
-  // Fungsi Hapus Transaksi (BARU)
   const deleteTransaction = async (id) => {
     if (!confirm("Anda yakin ingin menghapus transaksi ini?")) return;
 
     setLoading(true);
     setError(null);
+    setMessage(null);
 
     try {
-      // Memanggil API DELETE dengan ID di URL query
       const response = await fetch(`/api/transactions?id=${id}`, {
         method: "DELETE",
       });
@@ -127,13 +128,86 @@ export default function FinanceTracker() {
         throw new Error(errorData.error || "Gagal menghapus transaksi.");
       }
 
-      // Refresh daftar transaksi setelah berhasil
       await fetchTransactions();
+      setMessage("Transaksi berhasil dihapus!");
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+      clearMessages();
     }
+  };
+
+  // --- FITUR EXPORT (BARU) ---
+  const handleExport = () => {
+    const jsonString = JSON.stringify(transactions, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `backup_keuangan_${
+      new Date().toISOString().split("T")[0]
+    }.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setMessage("Data berhasil diekspor ke file JSON!");
+    clearMessages();
+  };
+
+  // --- FITUR IMPORT (BARU) ---
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      setLoading(true);
+      setError(null);
+      setMessage(null);
+
+      try {
+        const importedData = JSON.parse(event.target.result);
+
+        if (!Array.isArray(importedData)) {
+          throw new Error(
+            "File JSON tidak valid. Data harus berupa array transaksi."
+          );
+        }
+
+        // Kirim data ke API PUT untuk restore
+        const response = await fetch("/api/transactions", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transactions: importedData }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Gagal memproses data impor.");
+        }
+
+        // Refresh data setelah impor
+        await fetchTransactions();
+        setMessage(
+          `Berhasil mengimpor dan me-restore ${importedData.length} transaksi!`
+        );
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+        e.target.value = null; // Reset input file
+        clearMessages();
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImportClick = () => {
+    importFileInputRef.current.click();
   };
 
   // --- Perhitungan Saldo (SAMA) ---
@@ -159,23 +233,61 @@ export default function FinanceTracker() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       <div className="max-w-4xl mx-auto p-6 bg-white dark:bg-gray-800 shadow-xl rounded-lg mt-10">
-        {/* Header dan Tombol Dark Mode */}
+        {/* Header, Tombol Dark Mode, dan Aksi Backup/Restore */}
         <div className="flex justify-between items-center border-b pb-2 mb-6 border-gray-200 dark:border-gray-700">
           <h1 className="text-3xl font-bold text-indigo-700 dark:text-indigo-400">
             💰 Dashboard Keuangan Pribadi
           </h1>
-          <button
-            onClick={toggleDarkMode}
-            className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          >
-            {isDarkMode ? "🌞" : "🌙"}
-          </button>
+          <div className="flex space-x-2">
+            {/* Tombol Import (Restore) */}
+            <button
+              onClick={handleImportClick}
+              className="text-sm font-semibold py-2 px-3 rounded-md bg-yellow-500 text-white hover:bg-yellow-600 transition"
+              disabled={loading}
+            >
+              Import & Restore
+            </button>
+            {/* Input File tersembunyi */}
+            <input
+              type="file"
+              ref={importFileInputRef}
+              onChange={handleFileChange}
+              accept=".json"
+              style={{ display: "none" }}
+            />
+
+            {/* Tombol Export (Backup) */}
+            <button
+              onClick={handleExport}
+              className="text-sm font-semibold py-2 px-3 rounded-md bg-blue-500 text-white hover:bg-blue-600 transition"
+              disabled={loading}
+            >
+              Export Backup
+            </button>
+
+            {/* Tombol Dark Mode */}
+            <button
+              onClick={toggleDarkMode}
+              className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+              title={
+                isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"
+              }
+              disabled={loading}
+            >
+              {isDarkMode ? "🌞" : "🌙"}
+            </button>
+          </div>
         </div>
 
+        {/* Pesan Error & Sukses */}
         {error && (
           <p className="text-red-600 dark:text-red-400 font-medium mb-4 p-3 bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700 rounded-md">
             Error: {error}
+          </p>
+        )}
+        {message && (
+          <p className="text-green-600 dark:text-green-400 font-medium mb-4 p-3 bg-green-100 dark:bg-green-900 border border-green-300 dark:border-green-700 rounded-md">
+            {message}
           </p>
         )}
 
@@ -222,6 +334,7 @@ export default function FinanceTracker() {
             onChange={handleChange}
             required
             className="col-span-1 p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 dark:text-gray-200"
+            disabled={loading}
           >
             <option value="">Jenis</option>
             <option value="pemasukan">Pemasukan</option>
@@ -235,6 +348,7 @@ export default function FinanceTracker() {
             onChange={handleChange}
             required
             className="col-span-2 p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-200"
+            disabled={loading}
           />
           <input
             type="number"
@@ -245,6 +359,7 @@ export default function FinanceTracker() {
             required
             min="1"
             className="col-span-1 p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-200"
+            disabled={loading}
           />
           <input
             type="date"
@@ -253,12 +368,14 @@ export default function FinanceTracker() {
             onChange={handleChange}
             required
             className="col-span-1 p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-200"
+            disabled={loading}
           />
           <button
             type="submit"
             className="col-span-1 bg-indigo-600 text-white font-semibold py-2 rounded-md hover:bg-indigo-700 transition duration-150"
+            disabled={loading}
           >
-            Simpan
+            {loading ? "Menyimpan..." : "Simpan"}
           </button>
         </form>
 
@@ -274,7 +391,7 @@ export default function FinanceTracker() {
                 <TableHeader title="Deskripsi" />
                 <TableHeader title="Jenis" />
                 <TableHeader title="Jumlah" align="text-right" />
-                <TableHeader title="Aksi" /> {/* Tambah kolom aksi */}
+                <TableHeader title="Aksi" />
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -288,9 +405,9 @@ export default function FinanceTracker() {
                   </td>
                 </tr>
               ) : (
-                transactions.map((t) => (
+                transactions.map((t, index) => (
                   <tr
-                    key={t.id}
+                    key={index}
                     className={`
                                         ${
                                           t.jenis === "pemasukan"
@@ -299,7 +416,6 @@ export default function FinanceTracker() {
                                         }
                                     `}
                   >
-                    {/* Perbaikan Format Tanggal */}
                     <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {formatDate(t.tanggal)}
                     </td>
