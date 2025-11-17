@@ -23,10 +23,6 @@ export default function FinanceTracker() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const importFileInputRef = useRef(null); // Ref untuk input file
 
-  // ... (Logika Dark Mode, State, fetchTransactions, handleChange, handleSubmit, deleteTransaction - SEMUA SAMA) ...
-  // (Pindahkan fungsi fetchTransactions, handleChange, handleSubmit, deleteTransaction dari kode sebelumnya ke sini)
-
-  // --- State dan Logic Lainnya ---
   const [transactions, setTransactions] = useState([]);
   const [formData, setFormData] = useState({
     jenis: "",
@@ -36,13 +32,13 @@ export default function FinanceTracker() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [message, setMessage] = useState(null); // State untuk pesan sukses
+  const [message, setMessage] = useState(null);
 
   const clearMessages = () => {
     setTimeout(() => {
       setError(null);
       setMessage(null);
-    }, 5000); // Pesan hilang setelah 5 detik
+    }, 5000);
   };
 
   const fetchTransactions = async () => {
@@ -54,9 +50,13 @@ export default function FinanceTracker() {
         throw new Error("Gagal mengambil data dari server.");
       }
       const data = await response.json();
-      // Membersihkan kolom 'id' dan 'created_at' agar data siap di-export
-      const cleanData = data.map(({ id, created_at, ...rest }) => rest);
-      setTransactions(cleanData);
+
+      // PERBAIKAN: JANGAN HAPUS ID. Hapus 'created_at' saja jika ada.
+      // ID diperlukan sebagai key unik di React dan untuk menghapus transaksi.
+      // Kita hanya akan memastikan ID ada, bukan menghapusnya.
+      const cleanedData = data.map(({ created_at, ...rest }) => ({ ...rest }));
+
+      setTransactions(data);
     } catch (err) {
       setError(err.message);
       clearMessages();
@@ -140,7 +140,10 @@ export default function FinanceTracker() {
 
   // --- FITUR EXPORT (BARU) ---
   const handleExport = () => {
-    const jsonString = JSON.stringify(transactions, null, 2);
+    // Saat ekspor, hapus 'id' dari data karena kita tidak ingin mengimpor ID database lama
+    const dataToExport = transactions.map(({ id, ...rest }) => rest);
+
+    const jsonString = JSON.stringify(dataToExport, null, 2);
     const blob = new Blob([jsonString], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -178,7 +181,15 @@ export default function FinanceTracker() {
           );
         }
 
-        // Kirim data ke API PUT untuk restore
+        if (
+          !confirm(
+            "Peringatan: Proses ini akan MENGHAPUS SEMUA DATA transaksi yang ada di database saat ini. Lanjutkan?"
+          )
+        ) {
+          setLoading(false);
+          return;
+        }
+
         const response = await fetch("/api/transactions", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -190,7 +201,6 @@ export default function FinanceTracker() {
           throw new Error(errorData.error || "Gagal memproses data impor.");
         }
 
-        // Refresh data setelah impor
         await fetchTransactions();
         setMessage(
           `Berhasil mengimpor dan me-restore ${importedData.length} transaksi!`
@@ -199,7 +209,7 @@ export default function FinanceTracker() {
         setError(err.message);
       } finally {
         setLoading(false);
-        e.target.value = null; // Reset input file
+        e.target.value = null;
         clearMessages();
       }
     };
@@ -210,7 +220,6 @@ export default function FinanceTracker() {
     importFileInputRef.current.click();
   };
 
-  // --- Perhitungan Saldo (SAMA) ---
   const totalIncome = transactions
     .filter((t) => t.jenis === "pemasukan")
     .reduce((sum, t) => sum + t.jumlah, 0);
@@ -235,8 +244,9 @@ export default function FinanceTracker() {
       <div className="max-w-4xl mx-auto p-6 bg-white dark:bg-gray-800 shadow-xl rounded-lg mt-10">
         {/* Header, Tombol Dark Mode, dan Aksi Backup/Restore */}
         <div className="flex justify-between items-center border-b pb-2 mb-6 border-gray-200 dark:border-gray-700">
+          {/* PERBAIKAN: Hapus emoji yang bermasalah */}
           <h1 className="text-3xl font-bold text-indigo-700 dark:text-indigo-400">
-            💰 Dashboard Keuangan Pribadi
+            💸 Dashboard Keuangan Pribadi
           </h1>
           <div className="flex space-x-2">
             {/* Tombol Import (Restore) */}
@@ -274,6 +284,7 @@ export default function FinanceTracker() {
               }
               disabled={loading}
             >
+              {/* PERBAIKAN: Ganti emoji yang bermasalah */}
               {isDarkMode ? "🌞" : "🌙"}
             </button>
           </div>
@@ -405,9 +416,9 @@ export default function FinanceTracker() {
                   </td>
                 </tr>
               ) : (
-                transactions.map((t, index) => (
+                transactions.map((t) => (
                   <tr
-                    key={index}
+                    key={t.id}
                     className={`
                                         ${
                                           t.jenis === "pemasukan"
