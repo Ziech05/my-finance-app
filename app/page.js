@@ -13,11 +13,17 @@ const formatRupiah = (amount) => {
   }).format(amount);
 };
 
+// Helper untuk memformat tanggal (BARU: menghilangkan jam/zona waktu)
+const formatDate = (dateString) => {
+  if (!dateString) return "";
+  // Mengambil hanya tanggal YYYY-MM-DD
+  return dateString.split("T")[0];
+};
+
 export default function FinanceTracker() {
-  // Tambahkan state untuk Dark Mode
   const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // Logika Dark Mode
+  // Logika Dark Mode (SAMA)
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add("dark");
@@ -30,7 +36,7 @@ export default function FinanceTracker() {
     setIsDarkMode(!isDarkMode);
   };
 
-  // --- State dan Logic Lainnya (SAMA seperti sebelumnya) ---
+  // --- State dan Logic Lainnya (SAMA) ---
 
   const [transactions, setTransactions] = useState([]);
   const [formData, setFormData] = useState({
@@ -43,6 +49,7 @@ export default function FinanceTracker() {
   const [error, setError] = useState(null);
 
   const fetchTransactions = async () => {
+    /* ... (SAMA) ... */
     setLoading(true);
     setError(null);
     try {
@@ -69,6 +76,7 @@ export default function FinanceTracker() {
   };
 
   const handleSubmit = async (e) => {
+    /* ... (SAMA) ... */
     e.preventDefault();
     setError(null);
 
@@ -101,6 +109,34 @@ export default function FinanceTracker() {
     }
   };
 
+  // Fungsi Hapus Transaksi (BARU)
+  const deleteTransaction = async (id) => {
+    if (!confirm("Anda yakin ingin menghapus transaksi ini?")) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Memanggil API DELETE dengan ID di URL query
+      const response = await fetch(`/api/transactions?id=${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Gagal menghapus transaksi.");
+      }
+
+      // Refresh daftar transaksi setelah berhasil
+      await fetchTransactions();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- Perhitungan Saldo (SAMA) ---
   const totalIncome = transactions
     .filter((t) => t.jenis === "pemasukan")
     .reduce((sum, t) => sum + t.jumlah, 0);
@@ -121,7 +157,6 @@ export default function FinanceTracker() {
     );
 
   return (
-    // Latar belakang aplikasi akan gelap saat dark:bg-gray-900 diaktifkan
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       <div className="max-w-4xl mx-auto p-6 bg-white dark:bg-gray-800 shadow-xl rounded-lg mt-10">
         {/* Header dan Tombol Dark Mode */}
@@ -239,6 +274,7 @@ export default function FinanceTracker() {
                 <TableHeader title="Deskripsi" />
                 <TableHeader title="Jenis" />
                 <TableHeader title="Jumlah" align="text-right" />
+                <TableHeader title="Aksi" /> {/* Tambah kolom aksi */}
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -263,8 +299,9 @@ export default function FinanceTracker() {
                                         }
                                     `}
                   >
+                    {/* Perbaikan Format Tanggal */}
                     <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {t.tanggal}
+                      {formatDate(t.tanggal)}
                     </td>
                     <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                       {t.deskripsi}
@@ -289,6 +326,16 @@ export default function FinanceTracker() {
                     >
                       {formatRupiah(t.jumlah)}
                     </td>
+                    {/* Tombol Hapus */}
+                    <td className="px-6 py-3 whitespace-nowrap text-sm font-medium">
+                      <button
+                        onClick={() => deleteTransaction(t.id)}
+                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-200 transition"
+                        disabled={loading}
+                      >
+                        Hapus
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -300,7 +347,7 @@ export default function FinanceTracker() {
   );
 }
 
-// Komponen Pembantu (Auxiliary Components)
+// Komponen Pembantu (SAMA)
 const SummaryCard = ({ title, amount, color, bg, textColor }) => (
   <div
     className={`p-4 rounded-lg shadow-md flex flex-col items-center border border-gray-100 dark:border-gray-700 ${bg}`}
