@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "next lint",
+    "tailwind-init": "npx tailwindcss init -p"
   },
   "dependencies": {
     "@vercel/postgres": "^0.10.0",
